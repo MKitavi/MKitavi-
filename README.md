@@ -38,7 +38,7 @@ Full incident response reports covering real-world attack scenarios investigated
 [twitter]: https://twitter.com/___________
 [youtube]: https://www.youtube.com/c/___________
 [instagram]: https://www.instagram.com/___________
-[linkedin](www.linkedin.com/in/mmkitavi315)
+[linkedin](www.linkedin.com/in/mmkitavi315)]
 
 <!--
 <img width="35" alt="image" src="https://github.com/user-attachments/assets/2f41c7cd-5ea8-4475-b451-a37161b6c3fb"> 
