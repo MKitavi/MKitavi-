@@ -12,7 +12,7 @@ I'm passionate about cybersecurity and love tackling complex challenges through 
 
 Step-by-step threat hunt investigations using SIEM tools  and Microsoft Defender for Endpoint — each writeup includes the scenario, every investigation question, the KQL OR SPL queries used, and a full MITRE ATT&CK mapping
 - [Threat Hunting Scenario (Tor Browser Usage)](https://github.com/kitavim2-commits/threat-hunting-scenario-tor-/tree/main)
-- [Threat Hunting Scenario (Azuki Import/Export)](https://github.com/kitavim2-commits/threat-hunting-scenario-Azuki-Import-Export-)
+- [Threat Hunting Scenario (Azuki Import/Export)](https://github.com/kitavim2-commits/threat-hunting-scenario-Azuki-Import-Export)
 - https://github.com/kitavim2-commits/threat-hunting-scenario-Azuki-Import-Export-
 Detecting and analyzing unauthorized Tor usage within an enterprise network.
 
