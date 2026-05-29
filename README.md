@@ -21,7 +21,8 @@ Step-by-step threat hunt investigations using SIEM tools  and Microsoft Defender
 
 - [Windows Endpoint Detection Lab — Sysmon + Splunk SIEM](https://github.com/kitavim2-commits/windows-sysmon-splunk-siem-lab) 🆕
   Built a fully functional endpoint detection lab using Sysmon and Splunk Enterprise. Configured native Windows process auditing (Event ID 4688), deployed Sysmon with SwiftOnSecurity config, ingested four log sources into Splunk, and validated detection of T1059.001 (PowerShell encoded command) end-to-end with Atomic Red Team simulation.
-
+- [Active Directory Attack Lab — Foothold to Domain Admin](https://github.com/MKitavi/Active-Directory-Attack-Lab)
+  Built and compromised a Windows Server 2022 Active Directory domain (DC + three domain-joined hosts) on an isolated network. Walked the full kill chain from a single low-privilege domain user to Domain Admin — NetExec SMB/LDAP enumeration, privileged group discovery, credential reuse on Domain Admin accounts, DCSync extraction of all 38 domain hashes, and pass-the-hash to the target account. Includes a findings table and prioritized remediation (credential hygiene, LAPS, admin tiering, DCSync detection).
 ---
 ## 🛡️ Incident Response Labs and Reports
 Full incident response reports covering real-world attack scenarios investigated in lab environments.
