@@ -14,6 +14,8 @@ Step-by-step threat hunt investigations using SIEM tools  and Microsoft Defender
 - [Threat Hunting Scenario (Tor Browser Usage)](https://github.com/kitavim2-commits/threat-hunting-scenario-tor-/tree/main)
 - [Threat Hunting Scenario (Azuki Import/Export)](https://github.com/kitavim2-commits/threat-hunting-scenario-Azuki-Import-Export)
 - [Threat Hunting Scenario (EMBERFORGE Source Leak)](https://github.com/kitavim2-commits/EMBERFORGE-Source-Leak-Active-Directory-Attack)
+- [Threat Hunting Scenario (Signals After the Noise)](Threat-Hunting/Operation-Signals-After-The-Noise)
+  
   
 ---
 
